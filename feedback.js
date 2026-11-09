@@ -2,6 +2,8 @@
 window.Feedback = (() => {
  const KEY='intrend.concept-review.feedback.v1';
  const CATEGORIES=['','Frage','Korrektur','Ergänzung','Zustimmung'];
+ // Historical labels remain valid for the same stable target ID and type.
+ const LEGACY_LABELS={'CB-01':['Arbeitskatalog & Gruppen']};
  const iso=v=>typeof v==='string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v) && !Number.isNaN(Date.parse(v)) && new Date(v).toISOString()===v;
  function create(targets,version){
   let comments=[],raw=null,memory=false,warning='';
@@ -16,10 +18,10 @@ window.Feedback = (() => {
     if(typeof x.id!=='string' || !/^[a-zA-Z0-9_-]{8,80}$/.test(x.id) || ids.has(x.id))fail('Ungültige oder doppelte Kommentar-ID.');
     ids.add(x.id);
     const t=targets.get(x.targetId);
-    if(!t || t.title!==x.targetLabel || t.type!==x.targetType || x.conceptVersion!==version)fail('Kommentarziel oder Konzeptversion passt nicht zu diesem Zielbild.');
+    if(!t || (t.title!==x.targetLabel && !(LEGACY_LABELS[x.targetId]||[]).includes(x.targetLabel)) || t.type!==x.targetType || x.conceptVersion!==version)fail('Kommentarziel oder Konzeptversion passt nicht zu diesem Zielbild.');
     if(!iso(x.createdAt) || (x.updatedAt!==undefined && (!iso(x.updatedAt) || x.updatedAt<x.createdAt)))fail('Ungültiger Zeitstempel.');
     if(typeof x.reviewer!=='string' || x.reviewer.length>100 || !CATEGORIES.includes(x.category) || typeof x.text!=='string' || !x.text.trim() || x.text.length>5000 || /\u0000/.test(x.text+x.reviewer))fail('Ungültiger Kommentartext, Name oder Kategorie.');
-    return {id:x.id,targetId:x.targetId,targetLabel:t.title,targetType:t.type,conceptVersion:version,createdAt:x.createdAt,...(x.updatedAt?{updatedAt:x.updatedAt}:{}),reviewer:x.reviewer,category:x.category,text:x.text};
+    return {id:x.id,targetId:x.targetId,targetLabel:x.targetLabel,targetType:t.type,conceptVersion:version,createdAt:x.createdAt,...(x.updatedAt?{updatedAt:x.updatedAt}:{}),reviewer:x.reviewer,category:x.category,text:x.text};
    });
   }
   const envelope=items=>({schemaVersion:1,conceptVersion:version,exportedAt:new Date().toISOString(),comments:items});
@@ -39,7 +41,7 @@ window.Feedback = (() => {
    const t=targets.get(targetId);if(!t)fail('Unbekanntes Kommentarziel.');
    const prior=id?comments.find(c=>c.id===id):null;if(id&&!prior)fail('Der Kommentar ist nicht mehr vorhanden.');
    const now=new Date().toISOString();
-   const x={id:prior?.id||('c_'+crypto.randomUUID()),targetId,targetLabel:t.title,targetType:t.type,conceptVersion:version,createdAt:prior?.createdAt||now,...(prior?{updatedAt:now}:{}),reviewer:reviewer.trim(),category,text:text.trim()};
+   const x={id:prior?.id||('c_'+crypto.randomUUID()),targetId,targetLabel:prior?.targetLabel||t.title,targetType:t.type,conceptVersion:version,createdAt:prior?.createdAt||now,...(prior?{updatedAt:now}:{}),reviewer:reviewer.trim(),category,text:text.trim()};
    commit(prior?comments.map(c=>c.id===id?x:c):[...comments,x]);return x;
   }
   function planImport(data){
